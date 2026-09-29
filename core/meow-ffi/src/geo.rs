@@ -15,7 +15,7 @@ pub fn lookup_country_code(ip: IpAddr, geoip_path: Option<PathBuf>) -> Option<St
     let reader = maxminddb::Reader::open_readfile(&path).ok()?;
     let country: Option<maxminddb::geoip2::Country> = reader.lookup(ip).ok()?.decode().ok()?;
     country
-        .country
+        .and_then(|c| c.country)
         .and_then(|c| c.iso_code)
         .map(|s| s.to_string())
 }

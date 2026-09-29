@@ -29,8 +29,7 @@ fn home_dir() -> String {
 }
 
 /// 默认测速 URL（跟 mihomo 一致）。
-pub static TEST_URL: Mutex<String> =
-    Mutex::new("https://www.gstatic.com/generate_204".to_string());
+pub static TEST_URL: Mutex<&'static str> = Mutex::new("https://www.gstatic.com/generate_204");
 
 // ---------------------------------------------------------------- 生命周期
 
@@ -70,7 +69,7 @@ fn setup_config(data: &serde_json::Value) -> Result<serde_json::Value, String> {
     let params: SetupParams = serde_json::from_value(data.clone())
         .map_err(|e| format!("bad setup params: {e}"))?;
     if !params.test_url.is_empty() {
-        *TEST_URL.lock().unwrap() = params.test_url.clone();
+        *TEST_URL.lock().unwrap() = Box::leak(params.test_url.into_boxed_str());
     }
 
     let config_path = format!("{}/config.yaml", home_dir());
@@ -196,7 +195,7 @@ async fn async_test_delay(data: &serde_json::Value) -> Result<serde_json::Value,
     let base = api_base()?;
     let secret = api_creds().1;
     let test_url = if p.test_url.is_empty() {
-        TEST_URL.lock().unwrap().clone()
+        TEST_URL.lock().unwrap().to_string()
     } else {
         p.test_url.clone()
     };
