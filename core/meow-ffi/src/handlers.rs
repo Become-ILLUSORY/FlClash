@@ -504,7 +504,7 @@ fn urlencode(s: &str) -> String {
     for b in s.bytes() {
         match b as char {
             '0'..='9' | 'A'..='Z' | 'a'..='z' | '-' | '_' | '.' | '~' => out.push(b as char),
-            c => {
+            _ => {
                 out.push('%');
                 out.push_str(&format!("{:02X}", b));
             }
