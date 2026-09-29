@@ -12,7 +12,7 @@ pub fn lookup_country_code(ip: IpAddr, geoip_path: Option<PathBuf>) -> Option<St
     if !path.is_file() {
         return None;
     }
-    let reader = unsafe { maxminddb::Reader::open_mmap(path) }.ok()?;
+    let reader = maxminddb::Reader::open_readfile(&path).ok()?;
     let country: maxminddb::geoip2::Country = reader.lookup(ip).ok()?;
     country
         .country

@@ -153,6 +153,7 @@ pub extern "C" fn quickSetup(
 ) {
     let init = cstr(init_params);
     let setup = cstr(setup_params);
+    let cb = Cb(callback as usize);
     spawn_async(move || {
         // 1) init
         let init_action = acc(init_params_json(&init), action::ActionMethod::InitClash);
@@ -163,7 +164,7 @@ pub extern "C" fn quickSetup(
         let setup_action = acc(setup_val, action::ActionMethod::SetupConfig);
         let res = handlers::dispatch(&setup_action);
         holder = if holder.code == 0 { res } else { holder };
-        run_result(callback, &holder);
+        run_result(cb.0 as *mut c_void, &holder);
     });
 }
 
@@ -194,3 +195,9 @@ fn acc(data: serde_json::Value, method: action::ActionMethod) -> Action {
         data,
     }
 }
+
+/// 把 C 回调指针包成 Send 类型（usize 视图），便于跨线程捕获。
+#[derive(Clone, Copy)]
+struct Cb(usize);
+unsafe impl Send for Cb {}
+unsafe impl Sync for Cb {}

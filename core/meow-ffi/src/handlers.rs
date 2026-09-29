@@ -29,7 +29,7 @@ fn home_dir() -> String {
 }
 
 /// 默认测速 URL（跟 mihomo 一致）。
-pub static TEST_URL: Mutex<String> = Mutex::new("https://www.gstatic.com/generate_204".into());
+pub static TEST_URL: Mutex<&'static str> = Mutex::new("https://www.gstatic.com/generate_204");
 
 // ---------------------------------------------------------------- 生命周期
 
@@ -105,8 +105,7 @@ fn get_config(path: &str) -> Result<serde_json::Value, String> {
             .await
             .map_err(|e| e.to_string())?;
         // 用 raw 快照序列化成 FlClash 期望的 Map；并补 `rules` 别名（Dart 端读了再改名为 rule）。
-        let mut v = serde_yaml::to_value(&config.raw)
-            .map_err(|e| e.to_string())?;
+        let mut v = serde_json::to_value(&config.raw).map_err(|e| e.to_string())?;
         if let Some(rules) = v.get("rules").cloned() {
             v["rule"] = rules;
         }
@@ -196,7 +195,7 @@ async fn async_test_delay(data: &serde_json::Value) -> Result<serde_json::Value,
     let base = api_base()?;
     let secret = api_creds().1;
     let test_url = if p.test_url.is_empty() {
-        TEST_URL.lock().unwrap().clone()
+        TEST_URL.lock().unwrap().to_string()
     } else {
         p.test_url.clone()
     };
@@ -391,16 +390,7 @@ pub fn dispatch(action: &Action) -> ActionResult {
     let method = action.method;
     let id = action.id.clone();
     let result = match method {
-        ActionMethod::InitClash => {
-            let p: InitParams = serde_json::from_value(action.data.clone())
-                .map_err(|e| e.to_string())?;
-            let ok = init_clash(&p);
-            if ok {
-                Ok(json!(true))
-            } else {
-                Err("init failed".into())
-            }
-        }
+        ActionMethod::InitClash => do_init(action.data.clone()),
         ActionMethod::GetIsInit => Ok(json!(state::is_initialized())),
         ActionMethod::ForceGc => Ok(json!(true)), // meow 无显式 GC
         ActionMethod::Shutdown => Ok(json!(shutdown())),
@@ -472,6 +462,15 @@ pub fn dispatch(action: &Action) -> ActionResult {
     }
 }
 
+fn do_init(value: serde_json::Value) -> Result<serde_json::Value, String> {
+    let p: InitParams = serde_json::from_value(value).map_err(|e| e.to_string())?;
+    if init_clash(&p) {
+        Ok(json!(true))
+    } else {
+        Err("init failed".into())
+    }
+}
+
 // ---------------------------------------------------------------- helper
 
 fn as_str(v: &serde_json::Value) -> std::borrow::Cow<'_, str> {
@@ -509,6 +508,10 @@ fn urlencode(s: &str) -> String {
                 out.push('%');
                 out.push_str(&format!("{:02X}", b));
             }
+        }
+    }
+    out
+}            }
         }
     }
     out

@@ -128,7 +128,7 @@ pub async fn assemble(
                         tracing::error!("Listener error: {}", e);
                     }
                 })
-                .into_abort_handle());
+                .abort_handle());
             }
             _ => {}
         }
@@ -179,7 +179,7 @@ pub async fn assemble(
                 tracing::error!("API server error: {}", e);
             }
         })
-        .into_abort_handle());
+        .abort_handle());
 
         return Ok(Kernel {
             tunnel,
