@@ -105,13 +105,14 @@ pub extern "C" fn updateDns(s: *const c_char) {
 pub extern "C" fn invokeAction(callback: *mut c_void, params: *const c_char) {
     logging::init();
     let params = cstr(params);
+    let cb = Cb(callback as usize);
     spawn_async(move || {
         let action: Option<Action> = serde_json::from_str(&params).ok();
         let res = match action {
             Some(a) => handlers::dispatch(&a),
             None => ActionResult::error(String::new(), action::ActionMethod::GetIsInit, "bad json"),
         };
-        run_result(callback, &res);
+        run_result(cb.0 as *mut c_void, &res);
     });
 }
 
@@ -124,7 +125,7 @@ pub extern "C" fn setEventListener(listener: *mut c_void) {
     if listener.is_null() {
         *g = None;
     } else {
-        *g = Some(listener);
+        *g = Some(listener as usize);
     }
 }
 

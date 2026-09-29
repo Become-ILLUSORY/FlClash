@@ -195,7 +195,7 @@ async fn async_test_delay(data: &serde_json::Value) -> Result<serde_json::Value,
     let base = api_base()?;
     let secret = api_creds().1;
     let test_url = if p.test_url.is_empty() {
-        TEST_URL.lock().unwrap().to_string()
+        TEST_URL.lock().unwrap().clone()
     } else {
         p.test_url.clone()
     };
@@ -375,7 +375,7 @@ fn crash() {
 }
 
 fn delete_file(path: &str) -> Result<serde_json::Value, String> {
-    let meta = std::fs::metadata(path).map_err(|_| ())?;
+    let meta = std::fs::metadata(path).map_err(|e| e.to_string())?;
     if meta.is_dir() {
         std::fs::remove_dir_all(path).map_err(|e| e.to_string())?;
     } else {
@@ -449,66 +449,4 @@ pub fn dispatch(action: &Action) -> ActionResult {
             crash();
             Ok(json!(true))
         }
-        ActionMethod::DeleteFile => {
-            let path = as_str(&action.data).into_owned();
-            delete_file(&path)
-        }
-        ActionMethod::QuickSetup => Err("quickSetup handled in C ABI".into()),
-    };
-
-    match result {
-        Ok(data) => ActionResult::success(id, method, data),
-        Err(e) => ActionResult::error(id, method, e),
-    }
-}
-
-fn do_init(value: serde_json::Value) -> Result<serde_json::Value, String> {
-    let p: InitParams = serde_json::from_value(value).map_err(|e| e.to_string())?;
-    if init_clash(&p) {
-        Ok(json!(true))
-    } else {
-        Err("init failed".into())
-    }
-}
-
-// ---------------------------------------------------------------- helper
-
-fn as_str(v: &serde_json::Value) -> std::borrow::Cow<'_, str> {
-    v.as_str().map(Cow::Borrowed).unwrap_or_default()
-}
-
-use std::borrow::Cow;
-
-fn api_creds() -> (String, Option<String>) {
-    let guard = state::kernel();
-    match guard.as_ref() {
-        Some(k) => (
-            format!("http://{}", k.api_addr),
-            k.api_secret.clone(),
-        ),
-        None => (String::new(), None),
-    }
-}
-
-fn api_base() -> Result<String, String> {
-    let (base, _) = api_creds();
-    if base.is_empty() {
-        Err("kernel not running".into())
-    } else {
-        Ok(base)
-    }
-}
-
-fn urlencode(s: &str) -> String {
-    let mut out = String::new();
-    for b in s.bytes() {
-        match b as char {
-            '0'..='9' | 'A'..='Z' | 'a'..='z' | '-' | '_' | '.' | '~' => out.push(b as char),
-            c => {
-                out.push('%');
-                out.push_str(&format!("{:02X}", b));
-            }
-        }
-    }
-    out
-}
+    
