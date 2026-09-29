@@ -449,4 +449,10 @@ pub fn dispatch(action: &Action) -> ActionResult {
             crash();
             Ok(json!(true))
         }
+    };
+    match result {
+        Ok(data) => ActionResult::success(id, method, data),
+        Err(err) => ActionResult::error(id, method, err),
+    }
+}
     
