@@ -21,8 +21,8 @@ mod state;
 mod tun;
 
 use std::os::raw::{c_char, c_int, c_void};
+use std::sync::OnceLock;
 
-use once_cell::sync::OnceLock;
 use parking_lot::Mutex;
 use serde_json::json;
 

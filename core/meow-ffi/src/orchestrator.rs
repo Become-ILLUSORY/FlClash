@@ -26,7 +26,7 @@ pub struct Kernel {
     /// DNS server task（用于 stop 时回收）。
     pub dns_task: Option<tokio::task::JoinHandle<()>>,
     /// 订阅 refresh / geo 等后台任务句柄（stop 时 abort）。
-    pub background: Vec<tokio::task::JoinHandle<()>>,
+    pub background: Vec<tokio::task::AbortHandle>,
     /// log 广播发送端，供 `startLog` 订阅转发到 event listener。
     pub log_tx: broadcast::Sender<LogMessage>,
     pub log_rx: Option<broadcast::Receiver<LogMessage>>,
@@ -60,9 +60,9 @@ pub async fn assemble(
     tunnel.set_dialer_registry(config.provider_dialer_registry.clone());
     tunnel.set_mode(config.general.mode);
     tunnel.update_routing(
-        config.proxies.clone(),
-        config.rules.clone(),
-        config.dialer_registry.clone(),
+        config.proxies,
+        config.rules,
+        config.dialer_registry,
     );
     tunnel.spawn_background_tasks();
     tunnel.reconcile_health_checks(&meow_config::extract_health_check_specs(
@@ -70,7 +70,7 @@ pub async fn assemble(
     ));
 
     // 后台任务收集
-    let mut background: Vec<tokio::task::JoinHandle<()>> = Vec::new();
+    let mut background: Vec<tokio::task::AbortHandle> = Vec::new();
 
     // DNS server（可选）
     let dns_server_handle: Arc<RwLock<Option<meow_api::routes::DnsServerHandle>>> =
@@ -90,7 +90,7 @@ pub async fn assemble(
                 tracing::error!("DNS server error: {}", e);
             }
         });
-        background.push(task.clone());
+        background.push(task.abort_handle());
         *dns_server_handle.write() = Some(meow_api::routes::DnsServerHandle {
             listen: listen_addr,
             task,
@@ -127,7 +127,8 @@ pub async fn assemble(
                     if let Err(e) = listener.run_on(socket).await {
                         tracing::error!("Listener error: {}", e);
                     }
-                }));
+                })
+                .into_abort_handle());
             }
             _ => {}
         }
@@ -177,7 +178,8 @@ pub async fn assemble(
             if let Err(e) = api.run_on(socket).await {
                 tracing::error!("API server error: {}", e);
             }
-        }));
+        })
+        .into_abort_handle());
 
         return Ok(Kernel {
             tunnel,

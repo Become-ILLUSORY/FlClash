@@ -21,7 +21,7 @@ pub static KERNEL: OnceCell<Arc<RwLock<Option<Kernel>>>> = OnceCell::new();
 pub static INITIALIZED: AtomicBool = AtomicBool::new(false);
 
 /// 事件订阅回调（setEventListener 注入的 InvokeInterface）。
-pub static EVENT_LISTENER: OnceCell<Mutex<Option<*mut std::ffi::c_void>>> = OnceCell::new();
+pub static EVENT_LISTENER: OnceCell<Mutex<Option<usize>>> = OnceCell::new();
 
 use std::ffi::c_void;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -52,6 +52,7 @@ pub fn event_listener() -> Option<*mut c_void> {
     EVENT_LISTENER
         .get()
         .and_then(|m| m.lock().unwrap().clone())
+        .map(|x| x as *mut c_void)
 }
 
 /// 把一个 JSON 字符串推送给 event listener（等价 Go 的 sendMessage）。

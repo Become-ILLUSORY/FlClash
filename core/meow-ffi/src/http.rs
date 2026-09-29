@@ -23,7 +23,11 @@ pub async fn request(
         .timeout(Duration::from_secs(30))
         .build()
         .map_err(|e| e.to_string())?;
-    let mut req = client.request(method.parse().map_err(|e| e.to_string())?, url);
+    let mut req = client
+        .request(
+            method.parse::<reqwest::Method>().map_err(|e| e.to_string())?,
+            url,
+        );
     if let Some(s) = secret {
         if !s.is_empty() {
             req = req.bearer_auth(s);

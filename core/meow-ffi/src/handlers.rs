@@ -179,7 +179,7 @@ async fn get_proxies_async() -> Result<serde_json::Value, String> {
         .cloned()
         .unwrap_or(serde_json::Value::Object(Default::default()));
     // FlClash 期望 "all" = 组名列表（meow 的 /group 只返回组）
-    let all = groups
+    let all: Vec<serde_json::Value> = groups
         .get("proxies")
         .and_then(|p| p.as_object())
         .map(|m| m.keys().cloned().map(serde_json::Value::String).collect())
@@ -195,14 +195,15 @@ async fn async_test_delay(data: &serde_json::Value) -> Result<serde_json::Value,
     let p: TestDelayParams = serde_json::from_value(data.clone()).map_err(|e| e.to_string())?;
     let base = api_base()?;
     let secret = api_creds().1;
+    let test_url = if p.test_url.is_empty() {
+        TEST_URL.lock().unwrap().clone()
+    } else {
+        p.test_url.clone()
+    };
     let url = format!(
         "/proxies/{}/delay?url={}&timeout={}",
         urlencode(&p.proxy_name),
-        urlencode(if p.test_url.is_empty() {
-            &TEST_URL.lock().unwrap().clone()
-        } else {
-            &p.test_url
-        }),
+        urlencode(&test_url),
         p.timeout
     );
     let body = crate::http::api_get(&base, &secret, &url).await?;
@@ -221,7 +222,7 @@ fn test_delay(data: &serde_json::Value) -> Result<serde_json::Value, String> {
 
 // ---------------------------------------------------------------- 流量/连接/内存
 
-fn traffic() -> serde_json::Value {
+pub fn traffic() -> serde_json::Value {
     let guard = state::kernel();
     match guard.as_ref() {
         Some(k) => {
@@ -232,7 +233,7 @@ fn traffic() -> serde_json::Value {
     }
 }
 
-fn total_traffic() -> serde_json::Value {
+pub fn total_traffic() -> serde_json::Value {
     let guard = state::kernel();
     match guard.as_ref() {
         Some(k) => {
@@ -360,12 +361,12 @@ fn stop_listener() -> bool {
     true
 }
 
-fn update_dns(_s: &str) -> bool {
+pub fn update_dns(_s: &str) -> bool {
     // meow-rs 的 DNS 由配置文件管理，无外部运行时改 DNS 接口，按成功返回。
     true
 }
 
-fn suspend(_s: bool) -> bool {
+pub fn suspend(_s: bool) -> bool {
     // meow-rs 无 suspend 语义；保留接口占位。
     true
 }
