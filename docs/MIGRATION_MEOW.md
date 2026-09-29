@@ -65,13 +65,29 @@ core/meow-ffi/           ← 新增 Rust cdylib crate（产物名 clash → libc
 
 > 完整字段级对照见后续 `CORE_MEOW_MAPPING.md`（迁移时逐条填写，并在测试后勾选）。
 
-## 与本仓库其它机制的兼容
+## 与 meow-rs 现有钩子的衔接（已确认）
 
-- **Android VpnService**：`TunInterface.protect(fd)` 回调（`core.cpp` 里 `call_tun_interface_protect_impl`）是现成的。
-  meow-rs 目前 socket 是否走 `protect` 需要打 hook —— 见 `core/meow-ffi/src/tls.rs`（宿主把出站 fd 交给系统 VPN 保护）。
-- **桌面端**：FlClash 桌面用 `CoreService`（JSON over unix socket）而不是 `.so`。
-  迁移第一阶段先只替换 Android/lib 形态；桌面端 `.so` 等价可用 `libclash.so` 导出同一套 C 符号。
-- **GeoIP/GeoData**：`assets/data/` 里有 mmdb/geosite/asn；meow-rs 用 maxminddb 读 mmdb，路径约定需对齐。
+- **Android VpnService protect（宿主回调）**：meow-rs **已内置** `SocketProtector` 钩子
+  （`meow-common/src/socket_protect.rs:208/221`，`cfg(target_os="android")`）：宿主实现
+  `SocketProtector::protect(fd)`（内部调 `VpnService.protect`）后 `set_socket_protector(...)`，
+  之后 meow 所有经 `connect_tcp*` / `bind_udp` 的出站 socket 都会先被 protect。
+  → 我们把它桥接到 JNI 的 `protect_func`（`src/protect.rs`），**无需上游改动**。
+- **HostResolver 钩子**：`meow_common::{set_host_resolver, clear_host_resolver}` +
+  `meow_dns::ResolverHostHook`（main.rs 同款），代理服务器域名解析走配置 DNS。
+- **日志订阅**：`meow_api::log_stream::{LogBroadcastLayer, install_log_reloader, reload_log_level}`，
+  我们装 tracing 层并把广播转发到 FlClash 事件回调（`src/logging.rs`）。
+- **外部控制面**：meow-api 路由与 mihomo 基本同构（`/proxies` `/group` `/connections`
+  `/configs` `/traffic` `/logs` `/memory` `/providers/*`），所以我们只在回环地址起一个
+  ApiServer 供 handle 层查询，避免重复实现 mihomo 风格 JSON。
+
+## 唯一决定性的上游缺口：外置 fd TUN
+
+meow-rs 的 `TunListener` 用 `tun_rs::DeviceBuilder` **自建设备**
+（`crates/meow-listener/src/tun/mod.rs:424`），**没有 `from_fd` / 外部 fd 入口**，
+且 `tun.stack` 字段被 `parse_tun_config` 忽略（只支持 lwIP）。
+Android 的设备必须由 `VpnService` 建好、把 fd 传进来 —— 需要给上游加
+`TunListenerConfig.device_fd: Option<RawFd>`（见 `core/meow-ffi/src/tun.rs`）。
+补丁合入前，Android 只能「应用内代理」：mixed 监听 + `SocketProtector`，无系统 VPN 的 TUN 数据面。
 
 ## 里程碑
 

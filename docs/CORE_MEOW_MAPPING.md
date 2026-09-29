@@ -37,15 +37,24 @@
 | crash | 崩溃测试 | panic | — | ✅迁移 |
 | deleteFile | 删文件 | std::fs remove | CI | ✅迁移 |
 | quickSetup | init+setup(Android) | C ABI quickSetup | 真机 | 🔶verify |
-| startTUN/stopTun | VpnService fd (Android) | tun.rs 存 fd + 日志 | 真机 | ⛔gap(上游补丁) |
+| startTUN | VpnService fd + protect (Android) | protect.rs 装 SocketProtector；fd 暂存(tun.rs) | 真机 | 🔶verify(protect 可用，TUN 数据面 gap) |
+| stopTun | 关 TUN | protect::uninstall + teardown | 真机 | ✅迁移 |
 | setEventListener | 事件回调 | callback::result_func | 真机 | ✅迁移 |
 | suspend | 挂起 | no-op | — | ✅迁移(no-op) |
 
 ## 关键上游 gap（决定真机可用度）
-1. **外置 fd TUN**：meow-rs `TunListener` 自建设备、不接受 VpnService fd。
-   需要给 meow-rs 加 `TunListenerConfig.device_fd`（见 `src/tun.rs`）。补丁前 Android 只能用
-   「应用内代理」模式，系统 VPN TUN 数据面不可用。
-2. **sideLoadExternalProvider / updateGeoData**：meow-rs 倾向启动时自动拉取，无 mihomo 的运行时
-   手动「本地导入 / 立即更新」入口。可用 meow-api 的 PUT /providers 或 geodata_fetch 替代，未全接。
-3. **getProxies 的 `all` 组装**：meow-api /group 返回 `{proxies:{...}}`（mihomo 组视图），
-   已剥离出 `all`=组名，但需真机核对与 FlClash Dart 模型字段完全一致。
+1. **外置 fd TUN（唯一硬缺口）**：meow-rs `TunListener` 用 `tun_rs::DeviceBuilder` 自建设备
+   （`crates/meow-listener/src/tun/mod.rs:424`），无 `from_fd`/外部 fd 入口；`tun.stack` 亦被忽略。
+   需给上游加 `TunListenerConfig.device_fd`（见 `src/tun.rs`）。补丁前 Android 只能用「应用内代理」。
+2. **sideLoadExternalProvider / updateGeoData**：meow-rs 有 `geodata_fetch`（启动时 run_on_startup +
+   auto_update_loop）与 provider `refresh()`/后台 supervisor，但**没有 mihomo 那种“手动立刻更新/本地导入”**
+   的运行时入口。可经 meow-api `/providers/*` 或 geodata_fetch 的循环触发，尚未全接。
+3. **getProxies 的 `all` 组装**：meow-api `/group` 返回 `{proxies:{...}}`（mihomo 组视图）而非 `{groups:[...]}`，
+   已改为取 key 作为组名列表，但需真机核对与 FlClash Dart 模型字段完全一致。
+4. **无 forceGC / resetTraffic / suspend 对应语义**：均为调用占位（no-op）。
+
+## 已确认可用的 meow-rs 钩子（不需要改上游）
+- `SocketProtector`（Android protect 回调）：`meow-common/src/socket_protect.rs:208/221` → 见 `src/protect.rs`
+- `HostResolver`：`meow_common::{set_host_resolver, clear_host_resolver}` + `meow_dns::ResolverHostHook`
+- 日志：`meow_api::log_stream::{LogBroadcastLayer, install_log_reloader, reload_log_level}` → `src/logging.rs`
+- 连接跟踪：`Statistics::{active_connections, close_connection, close_all_connections_counted}`

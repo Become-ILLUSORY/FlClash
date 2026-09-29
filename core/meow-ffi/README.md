@@ -13,6 +13,8 @@ FlClash 与 meow-rs 的 C ABI 桥，产出 `libclash.so`，是原 Go 内核（`c
 - `src/geo.rs`          —— getCountryCode 的 MaxMind 查表
 - `src/http.rs`         —— 进程内 meow-api 回环查询客户端
 - `src/tun.rs`          —— Android VpnService 外置 fd 接入点（等待 meow-rs 上游补丁）
+- `src/protect.rs`      —— 把 JNI `protect_func` 桥到 meow 的 `SocketProtector`（仅 Android）
+- `src/logging.rs`      —— tracing + LogBroadcastLayer 安装与日志事件转发
 - `src/callback.rs`     —— 供 core.cpp JNI_OnLoad 注入的函数指针
 
 ## 依赖
@@ -23,8 +25,10 @@ FlClash 与 meow-rs 的 C ABI 桥，产出 `libclash.so`，是原 Go 内核（`c
 见根目录 `scripts/build-meow-core.sh`；CI 见 `.github/workflows/meow-core.yml`。
 
 ## 状态
-这是迁移的基础脚手架：协议、C ABI、TTunnel/DNS/API 装配、绝大部分 ActionMethod 都有实现，
-但**未经编译验证**，且以下点依赖 meow-rs 上游能力（详见 `docs/CORE_MEOW_MAPPING.md`）：
-- 外置 fd TUN（VpnService）—— meow-rs 上游需支持 `TunListenerConfig.device_fd`
-- sideLoadExternalProvider / updateGeoData —— meow 侧尚无与 mihomo 一致的运行时手动更新入口
-- resetTraffic / updateDns / suspend —— meow 无同类语义，暂为调用占位
+这是迁移的基础脚手架：协议、C ABI、TUN/DNS/API 装配、protect 桥、日志转发、绝大部分 ActionMethod
+都有实现，但**未经编译验证**。meow-rs 侧**唯一硬缺口是外置 fd TUN**（详见 `docs/CORE_MEOW_MAPPING.md`）：
+
+- **外置 fd TUN（VpnService）**：meow-rs 的 `TunListener` 无 fd 入口，需上游加 `TunListenerConfig.device_fd`（见 `src/tun.rs`）
+- sideLoadExternalProvider / updateGeoData、forceGC / resetTraffic / suspend：meow 无对应语义，暂为占位或经 meow-api 近似
+
+已确认**不需要改上游**：Android `SocketProtector`（`src/protect.rs`）、HostResolver、日志广播（`src/logging.rs`）。

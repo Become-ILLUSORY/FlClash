@@ -127,7 +127,7 @@ fn update_config(data: &serde_json::Value) -> Result<serde_json::Value, String> 
         }
     }
     if let Some(level) = &params.log_level {
-        let _ = meow_api::log_stream::reload_log_level(level);
+        let _ = crate::logging::set_level(level);
     }
     Ok(json!(true))
 }
@@ -260,22 +260,18 @@ fn get_connections() -> Result<serde_json::Value, String> {
 }
 
 async fn close_connections_async() -> Result<serde_json::Value, String> {
-    let base = api_base()?;
-    let secret = api_creds().1;
-    crate::http::request("DELETE", &format!("{base}/connections"), &secret, None).await?;
+    // 直接走统计层（无需 HTTP）：关闭全部 API 跟踪的连接
+    if let Some(k) = state::kernel().as_ref() {
+        k.tunnel.statistics().close_all_connections_counted();
+    }
     Ok(json!(true))
 }
 
 async fn close_connection_async(id: &str) -> Result<serde_json::Value, String> {
-    let base = api_base()?;
-    let secret = api_creds().1;
-    crate::http::request(
-        "DELETE",
-        &format!("{base}/connections/{}", urlencode(id)),
-        &secret,
-        None,
-    )
-    .await?;
+    let uuid = uuid::Uuid::parse_str(id).map_err(|e| format!("bad connection id: {e}"))?;
+    if let Some(k) = state::kernel().as_ref() {
+        k.tunnel.statistics().close_connection(uuid);
+    }
     Ok(json!(true))
 }
 
@@ -348,32 +344,11 @@ fn update_geo_data(_params: &serde_json::Value) -> Result<serde_json::Value, Str
 // ---------------------------------------------------------------- 日志/监听/杂项
 
 fn start_log() -> bool {
-    // 从 Kernel.log_tx 订阅并转发到 event listener
-    let guard = state::kernel();
-    // 已订阅则先停
-    stop_log();
-    if let Some(k) = guard.as_ref() {
-        let mut rx = k.log_tx.subscribe();
-        state::get_runtime().spawn(async move {
-            loop {
-                match rx.recv().await {
-                    Ok(msg) => {
-                        let j = json!({
-                            "type": "log",
-                            "data": { "payload": msg.payload, "level": format!("{:?}", msg.level).to_ascii_lowercase(), "time": "now" }
-                        });
-                        state::notify_listener(&j.to_string());
-                    }
-                    Err(_) => break,
-                }
-            }
-        });
-    }
-    true
+    crate::logging::start_forwarding()
 }
 
 fn stop_log() -> bool {
-    true
+    crate::logging::stop_forwarding()
 }
 
 fn start_listener() -> bool {

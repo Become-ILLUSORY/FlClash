@@ -23,7 +23,6 @@ full-proxy = [
     "meow-listener/listener-mixed",
     "meow-listener/listener-tun",
     "meow-api/listener-tun",
-    "meow-config/external-ui-download",
 ]
 
 # 内核 crate（path 依赖 meow-rs 工作区，固定 commit）
@@ -46,6 +45,8 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 serde_yaml = "0.9"
 tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt", "registry"] }
+uuid = { version = "1", features = ["v4"] }
 # 回环查询 meow-api 用
 reqwest = { version = "0.12", default-features = false, features = ["json"] }
 maxminddb = { version = "0.27", features = ["mmap"] }

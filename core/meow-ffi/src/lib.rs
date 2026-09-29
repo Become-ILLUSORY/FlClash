@@ -13,7 +13,10 @@ mod callback;
 mod geo;
 mod handlers;
 mod http;
+mod logging;
 mod orchestrator;
+#[cfg(target_os = "android")]
+mod protect;
 mod state;
 mod tun;
 
@@ -57,15 +60,20 @@ fn run_result(cb: *mut c_void, res: &ActionResult) {
 
 // ---------------------------------------------------------------- 导出函数
 
-/// 启动 TUN（Android）。meow-rs 外置 fd 补丁未合入前暂存 fd（见 tun.rs）。
+/// 启动 TUN（Android）。同时把 TunInterface 接成 meow-rs 的 SocketProtector
+/// （出站 socket 走 VpnService.protect，避免回流进 VPN）。
+/// 注：meow-rs 的 TunListener 目前不接受外部 fd（见 tun.rs），此处先装 protect + 暂存 fd。
 #[no_mangle]
 pub extern "C" fn startTUN(
-    _callback: *mut c_void,
+    callback: *mut c_void,
     fd: c_int,
     stack: *const c_char,
     address: *const c_char,
     dns: *const c_char,
 ) {
+    logging::init();
+    #[cfg(target_os = "android")]
+    protect::install(callback);
     let stack = cstr(stack);
     let address = cstr(address);
     let dns = cstr(dns);
@@ -74,6 +82,8 @@ pub extern "C" fn startTUN(
 
 #[no_mangle]
 pub extern "C" fn stopTun() {
+    #[cfg(target_os = "android")]
+    protect::uninstall();
     tun::stop_tun_fd();
     if let Some(k) = state::kernel_mut().as_mut() {
         state::get_runtime().block_on(orchestrator::teardown(k));
@@ -93,6 +103,7 @@ pub extern "C" fn updateDns(s: *const c_char) {
 
 #[no_mangle]
 pub extern "C" fn invokeAction(callback: *mut c_void, params: *const c_char) {
+    logging::init();
     let params = cstr(params);
     spawn_async(move || {
         let action: Option<Action> = serde_json::from_str(&params).ok();
