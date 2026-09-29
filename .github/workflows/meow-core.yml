@@ -26,6 +26,11 @@ jobs:
       - name: Install system deps (BoringSSL 需要 cmake + C++)
         run: sudo apt-get update && sudo apt-get install -y cmake ninja-build clang
       - uses: dtolnay/rust-toolchain@stable
+      # 缓存 meow-rs 工作区 + BoringSSL 编译产物（最关键，最高能省掉大半构建时间）
+      - name: Cache cargo artifacts
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: "core/meow-ffi core/meow-rs"
       - name: Native build (rapid Rust compile-error gate)
         run: |
           set -e
@@ -53,6 +58,11 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.target }}
+      # 缓存 cargo 产物（含 BoringSSL），跨 ABI/运行复用
+      - name: Cache cargo artifacts
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: "core/meow-ffi core/meow-rs"
       - name: Locate NDK (preinstalled on GH runner)
         id: ndk
         run: |
