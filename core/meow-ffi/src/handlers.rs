@@ -29,7 +29,8 @@ fn home_dir() -> String {
 }
 
 /// 默认测速 URL（跟 mihomo 一致）。
-pub static TEST_URL: Mutex<&'static str> = Mutex::new("https://www.gstatic.com/generate_204");
+pub static TEST_URL: Mutex<String> =
+    Mutex::new("https://www.gstatic.com/generate_204".to_string());
 
 // ---------------------------------------------------------------- 生命周期
 
@@ -69,7 +70,7 @@ fn setup_config(data: &serde_json::Value) -> Result<serde_json::Value, String> {
     let params: SetupParams = serde_json::from_value(data.clone())
         .map_err(|e| format!("bad setup params: {e}"))?;
     if !params.test_url.is_empty() {
-        *TEST_URL.lock().unwrap() = params.test_url;
+        *TEST_URL.lock().unwrap() = params.test_url.clone();
     }
 
     let config_path = format!("{}/config.yaml", home_dir());
@@ -449,10 +450,66 @@ pub fn dispatch(action: &Action) -> ActionResult {
             crash();
             Ok(json!(true))
         }
+        ActionMethod::DeleteFile => {
+            let path = as_str(&action.data).into_owned();
+            delete_file(&path)
+        }
+        ActionMethod::QuickSetup => Err("quickSetup handled in C ABI".into()),
     };
+
     match result {
         Ok(data) => ActionResult::success(id, method, data),
-        Err(err) => ActionResult::error(id, method, err),
+        Err(e) => ActionResult::error(id, method, e),
     }
 }
-    
+
+fn do_init(value: serde_json::Value) -> Result<serde_json::Value, String> {
+    let p: InitParams = serde_json::from_value(value).map_err(|e| e.to_string())?;
+    if init_clash(&p) {
+        Ok(json!(true))
+    } else {
+        Err("init failed".into())
+    }
+}
+
+// ---------------------------------------------------------------- helper
+
+fn as_str(v: &serde_json::Value) -> std::borrow::Cow<'_, str> {
+    v.as_str().map(Cow::Borrowed).unwrap_or_default()
+}
+
+use std::borrow::Cow;
+
+fn api_creds() -> (String, Option<String>) {
+    let guard = state::kernel();
+    match guard.as_ref() {
+        Some(k) => (
+            format!("http://{}", k.api_addr),
+            k.api_secret.clone(),
+        ),
+        None => (String::new(), None),
+    }
+}
+
+fn api_base() -> Result<String, String> {
+    let (base, _) = api_creds();
+    if base.is_empty() {
+        Err("kernel not running".into())
+    } else {
+        Ok(base)
+    }
+}
+
+fn urlencode(s: &str) -> String {
+    let mut out = String::new();
+    for b in s.bytes() {
+        match b as char {
+            '0'..='9' | 'A'..='Z' | 'a'..='z' | '-' | '_' | '.' | '~' => out.push(b as char),
+            c => {
+                out.push('%');
+                out.push_str(&format!("{:02X}", b));
+            }
+        }
+    }
+    out
+}
