@@ -21,8 +21,11 @@ full-proxy = [
     "meow-listener/listener-http",
     "meow-listener/listener-socks5",
     "meow-listener/listener-mixed",
-    "meow-listener/listener-tun",
-    "meow-api/listener-tun",
+    # 注意：不要加 meow-listener/listener-tun / meow-api/listener-tun（Android
+    # 需要外部 fd 注入，meow 的 TunListener 自建设备用不了，见 src/tun.rs；
+    # 且该 feature 会拉入 route_manager，后者在 Android target 上编译失败：
+    # common/mod.rs 无条件 `impl crate::RouteManager`，而 RouteManager 仅定义于
+    # linux/unix_bsd/windows 模块。上游合入 device_fd 补丁后再启用。
 ]
 
 # 内核 crate（path 依赖 meow-rs 工作区，固定 commit）
