@@ -511,7 +511,7 @@ fn urlencode(s: &str) -> String {
         }
     }
     out
-}            }
+}
         }
     }
     out
