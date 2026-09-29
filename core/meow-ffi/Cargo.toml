@@ -1,0 +1,62 @@
+[package]
+name = "meow-flclash-ffi"
+version = "0.0.1"
+edition = "2021"
+rust-version = "1.89"
+description = "FlClash <-> meow-rs C ABI bridge (libclash.so replacement)"
+license = "GPL-3.0"
+
+[features]
+default = ["full-proxy"]
+# 尽量少的协议/监听，便于先编译跑通 Android TUN 主链路。
+full-proxy = [
+    "meow-proxy/ss",
+    "meow-proxy/trojan",
+    "meow-proxy/vless",
+    "meow-proxy/vmess",
+    "meow-proxy/hysteria2",
+    "meow-proxy/anytls",
+    "meow-dns/dns-server",
+    "meow-dns/encrypted",
+    "meow-listener/listener-http",
+    "meow-listener/listener-socks5",
+    "meow-listener/listener-mixed",
+    "meow-listener/listener-tun",
+    "meow-api/listener-tun",
+    "meow-config/external-ui-download",
+]
+
+# 内核 crate（path 依赖 meow-rs 工作区，固定 commit）
+[dependencies]
+meow-common = { path = "../meow-rs/crates/meow-common" }
+meow-config = { path = "../meow-rs/crates/meow-config", default-features = false }
+meow-rules = { path = "../meow-rs/crates/meow-rules" }
+meow-tunnel = { path = "../meow-rs/crates/meow-tunnel" }
+meow-listener = { path = "../meow-rs/crates/meow-listener", default-features = false }
+meow-dns = { path = "../meow-rs/crates/meow-dns", default-features = false }
+meow-proxy = { path = "../meow-rs/crates/meow-proxy", default-features = false }
+meow-api = { path = "../meow-rs/crates/meow-api" }
+meow-app = { path = "../meow-rs/crates/meow-app" }
+
+# 并发容器（orchestrator 里存 provider 快照）
+dashmap = "6"
+
+tokio = { version = "1", features = ["full"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+serde_yaml = "0.9"
+tracing = "0.1"
+# 回环查询 meow-api 用
+reqwest = { version = "0.12", default-features = false, features = ["json"] }
+maxminddb = { version = "0.27", features = ["mmap"] }
+libc = "0.2"
+parking_lot = "0.12"
+once_cell = "1"
+
+# 外部 fd 构建 tun（Android VpnService 传 fd 进来）
+tun-rs = { version = "2.8", features = ["async_tokio"] }
+
+# cdylib：产出 libclash.so
+[lib]
+name = "clash"
+crate-type = ["cdylib", "staticlib"]

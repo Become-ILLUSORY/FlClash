@@ -2,6 +2,10 @@
 	path = core/Clash.Meta
 	url = git@github.com:myflavor/Clash.Meta.git
 	branch = FlClash
+[submodule "core/meow-rs"]
+	path = core/meow-rs
+	url = https://github.com/meow-rs/meow-rs.git
+	branch = main
 [submodule "plugins/flutter_distributor"]
 	path = plugins/flutter_distributor
 	url = git@github.com:myflavor/flutter_distributor.git
@@ -10,5 +14,3 @@
 	path = plugins/tray_manager
 	url = git@github.com:myflavor/tray_manager.git
 	branch = main
-
-
